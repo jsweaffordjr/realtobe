@@ -60,7 +60,7 @@ DXL16_ID                     = 16                 # Dynamixel
 DXL17_ID                     = 17                 # Dynamixel
 DXL18_ID                     = 18                 # Dynamixel
 BAUDRATE                    = 1000000             # Dynamixel AX12 default baudrate : 1000000
-DEVICENAME                  = '/dev/ttyUSB0'    # Check which port is being used on your controller, Linux: "/dev/ttyUSB0"
+DEVICENAME                  = '/dev/ttyUSB1'    # Check which port is being used on your controller, Linux: "/dev/ttyUSB0"
 
 TORQUE_ENABLE               = 1                 # Value for enabling the torque
 TORQUE_DISABLE              = 0                 # Value for disabling the torque

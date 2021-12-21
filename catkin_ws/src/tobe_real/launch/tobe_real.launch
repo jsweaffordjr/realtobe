@@ -15,5 +15,7 @@
   <include file="$(find tobe_control)/launch/tobe_control.launch"/>
 
   <node name="tobe_walker" pkg="tobe_real" type="tobe_walker.py" output="screen"/>
+  
+  <node name="IMU_read" pkg="tobe_real" type="arduino_read1.py" output="screen"/>
 
 </launch>
