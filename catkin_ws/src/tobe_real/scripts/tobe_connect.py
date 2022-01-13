@@ -7,6 +7,8 @@ import rospy
 import math
 import array as arr
 from std_msgs.msg import Float64
+from geometry_msgs.msg import Vector3
+from dynamixel_sdk import *                    # Uses Dynamixel SDK library
 
 import os
 
@@ -25,8 +27,6 @@ else:
         finally:
             termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
         return ch
-
-from dynamixel_sdk import *                    # Uses Dynamixel SDK library
 
 # Control table address
 ADDR_MX_TORQUE_ENABLE      = 24               # Control table address is different in Dynamixel model
@@ -65,7 +65,8 @@ DEVICENAME                  = '/dev/ttyUSB1'    # Check which port is being used
 TORQUE_ENABLE               = 1                 # Value for enabling the torque
 TORQUE_DISABLE              = 0                 # Value for disabling the torque
 
-vals=[200,800,250,770,511,511,511,511,511,511,511,511,511,511,511,511,511,511] # initialize goal position list for all 18 motors
+# initialize goal position list for all 18 motors
+vals=[281,741,272,750,409,613,511,511,540,482,592,430,174,848,278,744,550,472]
 
 # Initialize PortHandler instance
 # Set the port path
@@ -209,27 +210,8 @@ def movemotor18(ang):
     
 def listener():
 
-    rospy.init_node('tobe_demo',anonymous=True)
-    
-    rospy.Subscriber('/tobe/l_ankle_lateral_joint_position_controller/command',Float64,movemotor18)
-    rospy.Subscriber('/tobe/l_ankle_swing_joint_position_controller/command',Float64,movemotor16)
-    rospy.Subscriber('/tobe/l_knee_joint_position_controller/command',Float64,movemotor14)
-    rospy.Subscriber('/tobe/l_hip_swing_joint_position_controller/command',Float64,movemotor12)
-    rospy.Subscriber('/tobe/l_hip_lateral_joint_position_controller/command',Float64,movemotor10)
-    rospy.Subscriber('/tobe/l_hip_twist_joint_position_controller/command',Float64,movemotor8)
-    rospy.Subscriber('/tobe/r_hip_twist_joint_position_controller/command',Float64,movemotor7)
-    rospy.Subscriber('/tobe/r_hip_lateral_joint_position_controller/command',Float64,movemotor9)
-    rospy.Subscriber('/tobe/r_hip_swing_joint_position_controller/command',Float64,movemotor11)
-    rospy.Subscriber('/tobe/r_knee_joint_position_controller/command',Float64,movemotor13)
-    rospy.Subscriber('/tobe/r_ankle_swing_joint_position_controller/command',Float64,movemotor15)
-    rospy.Subscriber('/tobe/r_ankle_lateral_joint_position_controller/command',Float64,movemotor17)
-    rospy.Subscriber('/tobe/l_shoulder_swing_joint_position_controller/command',Float64,movemotor2)
-    rospy.Subscriber('/tobe/l_shoulder_lateral_joint_position_controller/command',Float64,movemotor4)
-    rospy.Subscriber('/tobe/l_elbow_joint_position_controller/command',Float64,movemotor6)
-    rospy.Subscriber('/tobe/r_shoulder_swing_joint_position_controller/command',Float64,movemotor1)
-    rospy.Subscriber('/tobe/r_shoulder_lateral_joint_position_controller/command',Float64,movemotor3)
-    rospy.Subscriber('/tobe/r_elbow_joint_position_controller/command',Float64,movemotor5)
-          
+    rospy.init_node('tobe_connect',anonymous=True)
+             
     # Enable Dynamixel#1 Torque
     dxl_comm_result, dxl_error = packetHandler.write1ByteTxRx(portHandler, DXL1_ID, ADDR_MX_TORQUE_ENABLE, TORQUE_ENABLE)
     if dxl_comm_result != COMM_SUCCESS:
@@ -391,9 +373,28 @@ def listener():
         print("%s" % packetHandler.getRxPacketError(dxl_error))
     else:
         print("Dynamixel#%d has been successfully connected" % DXL18_ID)
+
+    rospy.Subscriber('/tobe/l_ankle_lateral_joint_position_controller/command',Float64,movemotor18)
+    rospy.Subscriber('/tobe/l_ankle_swing_joint_position_controller/command',Float64,movemotor16)
+    rospy.Subscriber('/tobe/l_knee_joint_position_controller/command',Float64,movemotor14)
+    rospy.Subscriber('/tobe/l_hip_swing_joint_position_controller/command',Float64,movemotor12)
+    rospy.Subscriber('/tobe/l_hip_lateral_joint_position_controller/command',Float64,movemotor10)
+    rospy.Subscriber('/tobe/l_hip_twist_joint_position_controller/command',Float64,movemotor8)
+    rospy.Subscriber('/tobe/r_hip_twist_joint_position_controller/command',Float64,movemotor7)
+    rospy.Subscriber('/tobe/r_hip_lateral_joint_position_controller/command',Float64,movemotor9)
+    rospy.Subscriber('/tobe/r_hip_swing_joint_position_controller/command',Float64,movemotor11)
+    rospy.Subscriber('/tobe/r_knee_joint_position_controller/command',Float64,movemotor13)
+    rospy.Subscriber('/tobe/r_ankle_swing_joint_position_controller/command',Float64,movemotor15)
+    rospy.Subscriber('/tobe/r_ankle_lateral_joint_position_controller/command',Float64,movemotor17)
+    rospy.Subscriber('/tobe/l_shoulder_swing_joint_position_controller/command',Float64,movemotor2)
+    rospy.Subscriber('/tobe/l_shoulder_lateral_joint_position_controller/command',Float64,movemotor4)
+    rospy.Subscriber('/tobe/l_elbow_joint_position_controller/command',Float64,movemotor6)
+    rospy.Subscriber('/tobe/r_shoulder_swing_joint_position_controller/command',Float64,movemotor1)
+    rospy.Subscriber('/tobe/r_shoulder_lateral_joint_position_controller/command',Float64,movemotor3)
+    rospy.Subscriber('/tobe/r_elbow_joint_position_controller/command',Float64,movemotor5)
      
     r=rospy.Rate(20) # set loop rate
-      
+    
     while not rospy.is_shutdown():
         # Allocate goal position value into byte array
         param_goal_position1 = [DXL_LOBYTE(DXL_LOWORD(vals[0])), DXL_HIBYTE(DXL_LOWORD(vals[0])), DXL_LOBYTE(DXL_HIWORD(vals[0])), DXL_HIBYTE(DXL_HIWORD(vals[0]))]

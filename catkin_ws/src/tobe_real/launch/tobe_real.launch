@@ -1,21 +1,26 @@
 <launch>
 
   <param name="robot_description"
-    command="$(find xacro)/xacro $(find tobe_description)/tobe.xacro" /> 
-
+    textfile="$(find tobe_description)/tobe.urdf" /> 
+    
   <include file="$(find gazebo_ros)/launch/empty_world.launch">
     <arg name="world_name" value="worlds/empty.world"/>
-    <arg name="paused" value="true"/>
+    <arg name="paused" value="false"/>
     <arg name="use_sim_time" value="true"/>
-    
   </include>
-
-  <node name="spawn_urdf" pkg="gazebo_ros" type="spawn_model" args="-file $(find tobe_description)/tobe.urdf -urdf -model tobe -z 0.3845" />
-
-  <include file="$(find tobe_control)/launch/tobe_control.launch"/>
-
-  <node name="tobe_walker" pkg="tobe_real" type="tobe_walker.py" output="screen"/>
   
-  <node name="IMU_read" pkg="tobe_real" type="arduino_read1.py" output="screen"/>
+  <node name="spawn_urdf" pkg="gazebo_ros" type="spawn_model" args="-file $(find tobe_description)/tobe.urdf -urdf -model tobe -z 0.3845" />
+   
+  <include file="$(find tobe_control)/launch/tobe_control.launch"/>
+  
+  <node name="move_tobe" pkg="tobe_real" type="tobe_move.py" output="screen"/>
+  
+  <node name="read_IMU" pkg="tobe_real" type="arduino_read1.py" output="screen"/>
+  
+  <node name="detect_lean" pkg="tobe_real" type="lean_detect.py" output="screen"/>
+  
+  <node name="plot_realtime" pkg="tobe_real" type="realtime_plot.py" output="screen"/>
+  
+  <node name="connect_tobe" pkg="tobe_real" type="tobe_connect.py" output="screen"/>
 
 </launch>

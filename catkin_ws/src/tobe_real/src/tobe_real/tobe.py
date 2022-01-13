@@ -10,7 +10,7 @@ from geometry_msgs.msg import Vector3
 
 class Tobe:
     """
-    Client ROS class for manipulating Tobe in Gazebo
+    Client ROS class for manipulating Tobe
     """
     
     def __init__(self,ns="/tobe/"):
@@ -24,8 +24,7 @@ class Tobe:
             if self.joints is not None: break
             rospy.sleep(0.1)            
         rospy.loginfo(" -Joints populated: "+str(len(self.joints)))
-        
-        
+          
         rospy.loginfo("+Creating joint command publishers...")
         self._pub_joints={}
         for j in self.joints:

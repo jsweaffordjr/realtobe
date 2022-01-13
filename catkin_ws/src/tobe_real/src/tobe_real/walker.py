@@ -290,33 +290,31 @@ class WalkFunc:
         """
         Populate joints, initial pose for walking with 18-DOF robot
         """
-        self.pfn = {}  # phase joint functions
+        # set leg joint angles
+        angles = {}
 
         f = [-0.2, -1.1932, -1.7264, 0.4132, -0.15, 0, 0, 0.15, -0.4132, 1.7264,
              1.1932, 0.2, -0.3927, -0.3491, -0.5236, 0.3927, -0.3491, 0.5236]
 
-        self.pfn["l_ankle_lateral_joint"] = f[0]
-        self.pfn["l_ankle_swing_joint"] = f[1]
-        self.pfn["l_knee_joint"] = f[2]
-        self.pfn["l_hip_swing_joint"] = f[3]
-        self.pfn["l_hip_lateral_joint"] = f[4]
-        self.pfn["l_hip_twist_joint"] = f[5]
-        self.pfn["r_hip_twist_joint"] = f[6]
-        self.pfn["r_hip_lateral_joint"] = f[7]
-        self.pfn["r_hip_swing_joint"] = f[8]
-        self.pfn["r_knee_joint"] = f[9]
-        self.pfn["r_ankle_swing_joint"] = f[10]
-        self.pfn["r_ankle_lateral_joint"] = f[11]
-        self.pfn["l_shoulder_swing_joint"] = f[12]
-        self.pfn["l_shoulder_lateral_joint"] = f[13]
-        self.pfn["l_elbow_joint"] = f[14]
-        self.pfn["r_shoulder_swing_joint"] = f[15]
-        self.pfn["r_shoulder_lateral_joint"] = f[16]
-        self.pfn["r_elbow_joint"] = f[17]
-
-        self.joints = self.pfn.keys()
-
-        self.show()
+        angles["l_ankle_lateral_joint"] = f[0]
+        angles["l_ankle_swing_joint"] = f[1]
+        angles["l_knee_joint"] = f[2]
+        angles["l_hip_swing_joint"] = f[3]
+        angles["l_hip_lateral_joint"] = f[4]
+        angles["l_hip_twist_joint"] = f[5]
+        angles["r_hip_twist_joint"] = f[6]
+        angles["r_hip_lateral_joint"] = f[7]
+        angles["r_hip_swing_joint"] = f[8]
+        angles["r_knee_joint"] = f[9]
+        angles["r_ankle_swing_joint"] = f[10]
+        angles["r_ankle_lateral_joint"] = f[11]
+        angles["l_shoulder_swing_joint"] = f[12]
+        angles["l_shoulder_lateral_joint"] = f[13]
+        angles["l_elbow_joint"] = f[14]
+        angles["r_shoulder_swing_joint"] = f[15]
+        angles["r_shoulder_lateral_joint"] = f[16]
+        angles["r_elbow_joint"] = f[17]
+        return angles
 
 
 class Walker:
@@ -336,7 +334,7 @@ class Walker:
         self.T = self.Tinit
         self.phase = -math.pi
         self.A = self.func.update_walk(self.velocity, self.dt, self.phase)
-        self.ready_pos = self.func.get(self.A, self.phase)
+        self.ready_pos = self.func.generate() #self.func.get(self.A, self.phase)
 
         self._th_walk = None
 
@@ -485,15 +483,3 @@ def get_distance(anglesa, anglesb):
     return d
 
 
-if __name__ == "__main__":
-    rospy.init_node("walker")
-    rospy.sleep(1)
-
-    rospy.loginfo("Instantiating Tobe Client")
-    tobe = Tobe()
-    rospy.loginfo("Instantiating Tobe Walker")
-    walker = Walker(tobe)
-
-    rospy.loginfo("Tobe Walker Ready")
-    while not rospy.is_shutdown():
-        rospy.sleep(1)
