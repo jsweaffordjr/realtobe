@@ -6,6 +6,7 @@ import math
 import numpy as np
 from tobe_real.tobe import Tobe
 from geometry_msgs.msg import Vector3
+from std_msgs.msg import Float64
 from geometry_msgs.msg import Quaternion
 
 class StandFunc:
@@ -18,8 +19,8 @@ class StandFunc:
         # set initial joint angles
         angles = {}
 
-        f = [-0.2, -1.1932, -1.7264, 0.4132, -0.15, 0, 0, 0.15, -0.4132, 1.7264,
-             1.1932, 0.2, -0.3927, -0.3491, -0.5236, 0.3927, -0.3491, 0.5236]
+        f = [-0.2, -1.1, -1.7264, 0.5064, -0.15, 0, 0, 0.15, -0.5064, 1.7264,
+             1.1, 0.2, -0.3927, -0.3491, -0.5236, 0.3927, -0.3491, 0.5236]
 
         angles["l_ankle_lateral_joint"] = f[0]
         angles["l_ankle_swing_joint"] = f[1]
@@ -40,26 +41,48 @@ class StandFunc:
         angles["r_shoulder_lateral_joint"] = f[16]
         angles["r_elbow_joint"] = f[17]     
         self.init_angles = angles  
+        self.qz_min = 0.02 # lean threshold: values less than this (~1.15 deg.) are ignored
+        self.az_min = 0.2 # push threshold: values less than this are ignored
         
-    def get_ankles(self, z_lean, z_push):
+    def get_ankles_hips(self, z_lean, l_deriv):
+        # controller gains
+        Kpa = 0.01 # proportional gain for sag. ankles
+        Kda = 0 # derivative gain for sag. ankles
+
+        Kph = 0.3 # proportional gain for sag. hips
+        Kdh = 0   #derivative gain for sag. hips
+   
+        # thresholds for ankle, hip control:
+        minqz = 0.02
+        maxqz = 0.1
+        minaz = 2
         
-        """ Obtain the joint angles for sagittal ankles"""        
-        # determine magnitude of response (PD-ctrl)
-        Kp = 0.2
-        Kd = 0.2
+        # compute ankle, hip adjustments:
+        diff = 0
+        diff2 = 0
         
-        """ Estimate derivative using Savitzky-Golay filter on past five 'lean' points"""
-        deriv_z_lean = -0.2*z_lean[0]-0.1*z_lean[1]+0.1*z_lean[3]+0.2*z_lean[4]
-        
-        diff = Kp*z_lean[4] + Kd*deriv_z_lean 
+        if (abs(z_lean[4]) > minqz):
+            """ P control of lean via sagittal ankles""" 
+            diff = Kpa*z_lean[4] #+ Kda*l_deriv # PD control of lean
+            if (abs(z_lean[4]) > maxqz):
+                diff2 = Kph*z_lean[4] #+ Kdh*l_deriv           
+            
+        """ Set joint angles"""
+        # set initial joint angles
         angles = self.init_angles
 
+        f = [-0.2, -1.1, -1.7264, 0.5064, -0.15, 0, 0, 0.15, -0.5064, 1.7264,
+             1.1, 0.2, -0.3927, -0.3491, -0.5236, 0.3927, -0.3491, 0.5236]
+        
+        # left ankle angle should increase (f1 + diff), right ankle angle should decrease (f10 - diff) when forward lean occurs
+        # left hip angle should increase (f3 + diff2), right hip angle should decrease (f8 - diff2) when forward acceleration occurs
         f1 = angles["l_ankle_swing_joint"]
         f2 = angles["r_ankle_swing_joint"]
         
-        # left ankle angle should increase (f1 + diff), right ankle angle should decrease (f2 - diff) when forward lean occurs
         angles["l_ankle_swing_joint"] = f1 + diff
         angles["r_ankle_swing_joint"] = f2 - diff
+        angles["l_hip_swing_joint"] = f[3] + diff2
+        angles["r_hip_swing_joint"] = f[8] - diff2
 
         return angles
 
@@ -72,43 +95,50 @@ class Stand:
         self.tobe = tobe
         self.active = False
         self.standing = False
-        self.responding = False # this denotes whether robot is currently responding to "off-balance" signals
         self.func = StandFunc()
         self.ready_pos = self.func.init_angles
 
         self._th_stand = None
         self.response = self.ready_pos
 
-        self.push=[0,0,0,0,0] # last five values (prev. ~0.1 sec.) from 'push' publisher
-        self.lean=[0,0,0,0,0] # last five values (prev. ~0.1 sec.) from 'lean' publisher
-        self.qz_min = 0.02 # lean threshold: values less than this are rounded down to zero
-        self.az_min = 0.2 # push threshold: values less than this are rounded down to zero
+        self.lean=[0,0,0,0,0] # last 5 values from 'lean' publisher
+        self.l_deriv=0
+        self.z_next=[0,0,0]
+        self.qz_min = self.func.qz_min # lean threshold: values less than this are rounded down to zero
+        self.az_min = self.func.az_min # push threshold: values less than this are rounded down to zero
         
-        self._sub_acc = rospy.Subscriber("/push", Vector3, self._update_acceleration, queue_size=5) # subscribe to push detector topic
         self._sub_quat = rospy.Subscriber("/lean", Vector3, self._update_orientation, queue_size=5) # subscribe to lean detector topic
+        self.leandata = rospy.Publisher('leandata', Float64, queue_size=1)
 
         self.start()
-
-    def _update_acceleration(self, msg):
-        """
-        Catches push detection data and updates robot state
-        """
-        az = msg.z
-        if abs(az) < self.az_min:
-            az = 0 
-        self.push.pop(0) # remove the first element of self.push array
-        self.push.append(az) # add the newest acceleration data to the end of the array
-        
-        
+             
     def _update_orientation(self, msg):
         """
         Catches lean detection data and updates robot orientation
         """
         qz = msg.z
         if abs(qz) < self.qz_min:
-            qz = 0
-        self.lean.pop(0) # remove the first element of self.push array
-        self.lean.append(qz) # add the newest acceleration data to the end of the array
+            qz = 0          
+        self.lean.pop(0)
+        self.lean.append(qz) # update the newest orientation data
+        
+        # derivative estimates:
+        dt=0.02 # approximate dt between data points
+        
+        # homogeneous discrete differentiator, assuming 50 Hz rate
+        L=5 # Lipschitz constant
+        z0=self.z_next[0]
+        z1=self.z_next[1]
+        z2=self.z_next[2]
+        z0dot=z1-2.12*(L**(1/3))*(abs(z0-qz)**(2/3))*np.sign(z0-qz)
+        z1dot=z2-2*(L**(2/3))*(abs(z0-qz)**(1/3))*np.sign(z0-qz)
+        z2dot=-1.1*L*np.sign(z0-qz)
+        self.z_next[0]=z0+dt*z0dot+0.5*dt*dt*z1
+        self.z_next[1]=z1+dt*z1dot
+        self.z_next[2]=z2+dt*z2dot
+
+        self.l_deriv = z0dot # HDD output
+        self.leandata.publish(self.l_deriv)
 
     def start(self):
         if not self.active:
@@ -135,33 +165,9 @@ class Stand:
         r = rospy.Rate(samplerate)
         rospy.loginfo("Started standing thread")
         func = self.func
-        i = 0
         while not rospy.is_shutdown() and self.standing: # control loop
-            # if small disturbance or imbalance is detected, move sagittal ankles reflexively:
-            if self.responding == False: 
-                if abs(self.lean[4]) >= self.qz_min: # nontrivial lean is detected
-                    self.responding = True
-                    self.response=func.get_ankles(self.lean,self.push)
-                    self.tobe.set_angles(self.response)
-                    i = 0
-                else:
-                    if i > 50:
-                        self.tobe.set_angles(self.ready_pos)
-                        i = 0
-                    else:     
-                        i = i+1            
-            else:
-                if i > 20:
-                    if abs(self.lean[4]) < self.qz_min: 
-                        self.responding = False
-                        self.tobe.set_angles(self.ready_pos)  
-                        i = 0
-                    else:
-                        self.response=func.get_ankles(self.lean,self.push)
-                        self.tobe.set_angles(self.response)
-                        i = 0
-                else:     
-                    i = i+1       
+            self.response=func.get_ankles_hips(self.lean,self.l_deriv)
+            self.tobe.set_angles(self.response)      
             r.sleep()
         rospy.loginfo("Finished standing control thread")
 

@@ -66,7 +66,7 @@ TORQUE_ENABLE               = 1                 # Value for enabling the torque
 TORQUE_DISABLE              = 0                 # Value for disabling the torque
 
 # initialize goal position list for all 18 motors
-vals=[281,741,272,750,409,613,511,511,540,482,592,430,174,848,278,744,550,472]
+vals=[281,741,272,750,409,613,511,511,540,482,610,412,174,848,297,726,550,472]
 
 # Initialize PortHandler instance
 # Set the port path
