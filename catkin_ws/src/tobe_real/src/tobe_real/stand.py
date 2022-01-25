@@ -42,31 +42,36 @@ class StandFunc:
         angles["r_elbow_joint"] = f[17]     
         self.init_angles = angles  
         self.qz_min = 0.02 # lean threshold: values less than this (~1.15 deg.) are ignored
-        self.az_min = 0.2 # push threshold: values less than this are ignored
+        self.az_min = 0.1 # push threshold: values less than this are ignored
         
-    def get_ankles_hips(self, z_lean, l_deriv):
+    def get_ankles_hips(self, z_lean, l_deriv, z_push, gain_to_be_tuned):
         # controller gains
-        Kpa = 0.01 # proportional gain for sag. ankles
-        Kda = 0 # derivative gain for sag. ankles
-
-        Kph = 0.3 # proportional gain for sag. hips
-        Kdh = 0   #derivative gain for sag. hips
-   
-        # thresholds for ankle, hip control:
+        Kpa = 0.01 # proportional gain for sag. ankles       
+        Kih = 0.1 
+        
+        Kps = 0.2 # proportional gain for sag. shoulders
+        Kis = 0.5 # integral gain for sag. shoulders
+        
+        # thresholds for ankle, hip, shoulder control:
         minqz = 0.02
         maxqz = 0.1
-        minaz = 2
+        maxlrate = gain_to_be_tuned
         
         # compute ankle, hip adjustments:
         diff = 0
         diff2 = 0
+        diff3 = 0
         
         if (abs(z_lean[4]) > minqz):
-            """ P control of lean via sagittal ankles""" 
-            diff = Kpa*z_lean[4] #+ Kda*l_deriv # PD control of lean
+            """ PID control of sagittal ankles""" 
+            diff = Kpa*z_lean[4] # P control of ankles
             if (abs(z_lean[4]) > maxqz):
-                diff2 = Kph*z_lean[4] #+ Kdh*l_deriv           
-            
+                diff2 = Kih*z_lean[4] # I control of hips
+                diff3 = Kis*z_lean[4] # I control
+                
+        if (abs(l_deriv) > maxlrate):    
+            diff3 = diff3 + Kps*l_deriv  # PI control of shoulders          
+        
         """ Set joint angles"""
         # set initial joint angles
         angles = self.init_angles
@@ -76,6 +81,8 @@ class StandFunc:
         
         # left ankle angle should increase (f1 + diff), right ankle angle should decrease (f10 - diff) when forward lean occurs
         # left hip angle should increase (f3 + diff2), right hip angle should decrease (f8 - diff2) when forward acceleration occurs
+        # left shoulder angle should increase (f12 + diff3), right shoulder angle should decrease (f15 - diff3) when forward acc. occurs
+        
         f1 = angles["l_ankle_swing_joint"]
         f2 = angles["r_ankle_swing_joint"]
         
@@ -83,6 +90,8 @@ class StandFunc:
         angles["r_ankle_swing_joint"] = f2 - diff
         angles["l_hip_swing_joint"] = f[3] + diff2
         angles["r_hip_swing_joint"] = f[8] - diff2
+        angles["l_shoulder_swing_joint"] = f[12] + diff3
+        angles["r_shoulder_swing_joint"] = f[15] - diff3
 
         return angles
 
@@ -101,17 +110,40 @@ class Stand:
         self._th_stand = None
         self.response = self.ready_pos
 
+        self.push=0 # smoothed z-acceleration value
         self.lean=[0,0,0,0,0] # last 5 values from 'lean' publisher
         self.l_deriv=0
         self.z_next=[0,0,0]
+        self.kgain=0.001
         self.qz_min = self.func.qz_min # lean threshold: values less than this are rounded down to zero
         self.az_min = self.func.az_min # push threshold: values less than this are rounded down to zero
         
-        self._sub_quat = rospy.Subscriber("/lean", Vector3, self._update_orientation, queue_size=5) # subscribe to lean detector topic
+        self._sub_quat = rospy.Subscriber("/lean", Vector3, self._update_orientation, queue_size=5) # subscribe to lean topic
+        self._sub_acc = rospy.Subscriber("/push", Vector3, self._update_acceleration, queue_size=5) # subscribe to push topic
         self.leandata = rospy.Publisher('leandata', Float64, queue_size=1)
+        self.pushdata = rospy.Publisher('pushdata', Float64, queue_size=1)
+        self.Ktuning = rospy.Publisher('kgain', Float64, queue_size=1)
+        self._sub_gain = rospy.Subscriber("/kgain", Float64, self._update_gain, queue_size=5)
 
         self.start()
-             
+
+    def _update_gain(self, msg):
+        # update gain for PID control tuning
+        self.kgain = msg.data
+        
+    
+    def _update_acceleration(self, msg):
+        """
+        Catches acceleration data and applies exponentially weighted moving average to smooth out data
+        """
+        w = 0.6
+        az = msg.z      
+        if abs(az) < self.az_min:
+            az = 0    
+        acc=w*az+(1-w)*self.push
+        self.pushdata.publish(acc)
+        self.push=acc
+                    
     def _update_orientation(self, msg):
         """
         Catches lean detection data and updates robot orientation
@@ -166,7 +198,7 @@ class Stand:
         rospy.loginfo("Started standing thread")
         func = self.func
         while not rospy.is_shutdown() and self.standing: # control loop
-            self.response=func.get_ankles_hips(self.lean,self.l_deriv)
+            self.response=func.get_ankles_hips(self.lean,self.l_deriv,self.push,self.kgain)
             self.tobe.set_angles(self.response)      
             r.sleep()
         rospy.loginfo("Finished standing control thread")
